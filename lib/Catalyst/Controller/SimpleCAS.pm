@@ -4,7 +4,7 @@ use warnings;
 
 # ABSTRACT: General-purpose content-addressed storage (CAS) for Catalyst
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 use Moose;
 use Types::Standard qw(:all);
@@ -19,7 +19,7 @@ use Module::Runtime;
 use Try::Tiny;
 use Catalyst::Utils;
 use Path::Class qw(file dir);
-use JSON::DWIW;
+use JSON;
 use MIME::Base64;
 use String::Random;
 
@@ -134,17 +134,17 @@ sub upload_image: Local  {
   
   my ($checksum,$width,$height,$orig_width,$orig_height);
   
-  try {
-    # Will die unless Image::Resize is available, which is now optional (Github Issue #42)
+  if($self->_is_image_resize_available) {
+    # When Image::Resize is available:
     ($checksum,$width,$height,$resized,$orig_width,$orig_height) 
       = $self->add_resize_image($upload->tempname,$type,$subtype,$maxwidth,$maxheight);
   }
-  catch {
+  else {
     # Fall-back calculates new image size without actually resizing it. The img
     # tag will still be smaller, but the image file will be original dimensions
     ($checksum,$width,$height,$shrunk,$orig_width,$orig_height) 
       = $self->add_size_info_image($upload->tempname,$type,$subtype,$maxwidth,$maxheight);
-  };
+  }
   
   
   unlink $upload->tempname;
@@ -167,16 +167,20 @@ sub upload_image: Local  {
     filename => $self->safe_filename($upload->filename),
   };
   
-  return $c->res->body(JSON::DWIW->to_json($packet));
+  return $self->_json_response($c, $packet);
 }
 
+sub _is_image_resize_available {
+  my $flag = 1;
+  try   { Module::Runtime::require_module('Image::Resize') }
+  catch { $flag = 0 };
+  $flag
+}
 
 
 sub add_resize_image :Private {
   my ($self,$file,$type,$subtype,$maxwidth,$maxheight) = @_;
   
-  Module::Runtime::require_module('Image::Resize');
-
   my $checksum = $self->Store->add_content_file($file) or die "Failed to add content";
   
   my $resized = \0;
@@ -279,7 +283,7 @@ sub upload_file : Local {
     css_class => $Content->filelink_css_class,
   };
   
-  return $c->res->body(JSON::DWIW->to_json($packet));
+  return $self->_json_response($c, $packet);
 }
 
 
@@ -304,7 +308,38 @@ sub upload_echo_base64: Local  {
     echo_content => $base64
   };
   
-  return $c->res->body(JSON::DWIW->to_json($packet));
+  return $self->_json_response($c, $packet);
+}
+
+
+has '_json_view_name', is => 'ro', isa => Maybe[Str], lazy => 1, default => sub {
+  my $self = shift;
+  my $c = $self->_app;
+  my %views = map {$_=>1} $c->views;
+  
+  # If we're in a RapidApp application (or the RapidApp::JSON view is available),
+  # use it. This is needed to do the special embedded iframe encoding when the
+  # RequestContentType => 'text/x-rapidapp-form-response' header is present. This
+  # is set from the RapidApp/ExtJS client when doing uploads for things like 'Insert Image'
+  my $vn = 'RapidApp::JSON';
+  
+  $views{$vn} ? $vn : undef
+};
+
+
+sub _json_response {
+  my ($self, $c, $packet) = @_;
+  
+  $c->stash->{jsonData} = encode_json($packet);
+  
+  if(my $vn = $self->_json_view_name) {
+    my $view = $c->view( $vn ) or die "No such view name '$vn'";
+    $c->forward( $view );
+  }
+  else {
+    $c->res->content_type('application/json; charset=utf-8');
+    $c->res->body( $c->stash->{jsonData} );
+  }
 }
 
 
@@ -349,6 +384,17 @@ Directory/path to be used by the Store. Defaults to C<cas_store> within the Cata
 
 Actual object instance of the Store. By default this object is built using the C<store_class> (by 
 calling C<new()>) with the C<store_path> supplied to the constructor.
+
+=head2 _json_view_name
+
+Name of an optional Catalyst View to forward to to render JSON responses, with the pre-encoded 
+JSON set in the stash key 'jsonData'. If not set, the encoded JSON is simply set in response body 
+with the Content-Type set to C<application/json>.
+
+If the view name C<RapidApp::View> is loaded (which is the case when L<RapidApp> is loaded),
+it is used as the default. This is needed to support special round-trip encodings for 
+"Insert Image" and other ExtJS-based upload interfaces.
+
 
 =head1 PUBLIC ACTIONS
 
