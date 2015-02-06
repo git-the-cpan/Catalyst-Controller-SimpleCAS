@@ -14,11 +14,12 @@ use Email::MIME;
 use Email::MIME::CreateHTML;
 use CSS::Simple;
 use String::Random;
+use JSON;
 
 use Catalyst::Controller::SimpleCAS::MimeUriResolver;
 
 # FIXME - This is old and broken - file long gone from RapidApp ...
-my $ISOLATE_CSS_RULE = '@import "/static/rapidapp/css/CssIsolation.css";';
+my $ISOLATE_CSS_RULE = ''; #'@import "/static/rapidapp/css/CssIsolation.css";';
 
 # Backend action for Ext.ux.RapidApp.Plugin.HtmlEditor.LoadHtmlFile
 sub transcode_html: Path('texttranscode/transcode_html')  {
@@ -36,7 +37,7 @@ sub transcode_html: Path('texttranscode/transcode_html')  {
   
   # find out what encoding the user wants, defaulting to utf8
   my $dest_encoding= ($c->req->params->{dest_encoding} || 'utf-8');
-  my $out_codec= find_encoding($dest_encoding) or die "Unsupported encoding: $dest_encoding";
+  my $out_codec= Encode::find_encoding($dest_encoding) or die "Unsupported encoding: $dest_encoding";
   my $dest_octets= $out_codec->encode($src_text);
   
   # we need to set the charset here so that catalyst doesn't try to convert it further
@@ -162,11 +163,6 @@ sub normaliaze_rich_content {
     $src_octets = $upload->slurp;
   }
   
-  if($upload) {
-    scream($upload->type);
-  
-  }
-  
   my $content;
   
   # Try to determine what text encoding the file content came from, and then detect if it 
@@ -185,7 +181,7 @@ sub normaliaze_rich_content {
   else {
     if(!$upload || $upload->type =~ /^text/){
       my $src_encoding= encoding_from_html_document($src_octets) || 'utf-8';
-      my $in_codec= find_encoding($src_encoding) or die "Unsupported encoding: $src_encoding";
+      my $in_codec= Encode::find_encoding($src_encoding) or die "Unsupported encoding: $src_encoding";
       $content = (utf8::is_utf8($src_octets)) ? $src_octets : $in_codec->decode($src_octets);
     }
     # Binary
@@ -226,7 +222,36 @@ sub convert_from_mhtml {
   ## --
   
   my ($MainPart) = $MIME->subparts or return;
-  my $html = $MainPart->body_str;
+
+  ## ------
+  ## New: throw the kitchen sink at trying to figure out the charset/encoding
+  ##
+  ## This solves the long-standing problem where MHT files saved by Word 2010
+  ## would load garbled. These files are encoded as 'UTF-16LE', and the system
+  ## is not able to realize this out of the box (I think because it lists the
+  ## the charset ambiguously as ' charset="unicode" ' in the Content-Type
+  ## MIME header, but I'm no expert on Unicode). Below we're basically trying 
+  ## all of the functions of HTML::Encoding until we find one that gives us
+  ## an answer, and if we do get an answer, we apply it to the MIME object before
+  ## calling ->body_str() which will then use it to decode to text.
+  ##
+  my $decoded = $MainPart->body; # <-- decodes from base64 (or whatever) to *bytes*
+
+  my $char_set =
+    HTML::Encoding::encoding_from_html_document   ($decoded) ||
+    HTML::Encoding::encoding_from_byte_order_mark ($decoded) ||
+    HTML::Encoding::encoding_from_meta_element    ($decoded) ||
+    HTML::Encoding::xml_declaration_from_octets   ($decoded) ||
+    HTML::Encoding::encoding_from_first_chars     ($decoded) ||
+    HTML::Encoding::encoding_from_xml_declaration ($decoded) ||
+    HTML::Encoding::encoding_from_content_type    ($decoded) ||
+    HTML::Encoding::encoding_from_xml_document    ($decoded);
+
+  $MainPart->charset_set( $char_set ) if ($char_set);
+  ## ------
+
+  my $html = $MainPart->body_str; # <-- decodes to text using the character_set
+
   my $base_path = $self->parse_html_base_href(\$html) || $self->get_mime_part_base_path($MainPart);
   
   my %ndx = ();
@@ -470,7 +495,10 @@ sub embedded_src_data_to_url {
   my $checksum = try{$self->Store->add_content_base64($base64_data)}
     or return undef;
   
-  return join('/','',
+  # This is RapidApp-specific
+  my $pfx = $c->can('mount_url') ? $c->mount_url || '' : '';
+  
+  return join('/',$pfx,
     $self->action_namespace($c),
     'fetch_content', $checksum
   );
@@ -485,7 +513,10 @@ sub mime_part_to_cas_url {
   my $filename = $Part->filename(1);
   my $checksum = $self->Store->add_content($data) or return undef;
   
-  return join('/','',
+  # This is RapidApp-specific
+  my $pfx = $c->can('mount_url') ? $c->mount_url || '' : '';
+  
+  return join('/',$pfx,
     $self->action_namespace($c),
     'fetch_content', $checksum, $filename
   );
