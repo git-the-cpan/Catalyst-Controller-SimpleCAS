@@ -36,11 +36,13 @@ requires:
   MIME::Base64: 0
   Module::Runtime: 0
   Moose: 0
+  Moose::Role: 0
   MooseX::MethodAttributes::Role: 0.29
   Path::Class: 0
   String::Random: 0
   Try::Tiny: 0
   Types::Standard: 0
+  bytes: 0
   namespace::autoclean: 0
   strict: 0
   warnings: 0
@@ -48,4 +50,4 @@ resources:
   IRC: irc://irc.perl.org/#rapidapp
   bugtracker: https://github.com/vanstyn/Catalyst-Controller-SimpleCAS/issues
   repository: https://github.com/vanstyn/Catalyst-Controller-SimpleCAS.git
-version: 0.995
+version: 0.996
