@@ -11,6 +11,8 @@ lib/Catalyst/Controller/SimpleCAS.pm
 lib/Catalyst/Controller/SimpleCAS/Content.pm
 lib/Catalyst/Controller/SimpleCAS/MimeUriResolver.pm
 lib/Catalyst/Controller/SimpleCAS/Role/TextTranscode.pm
+lib/Catalyst/Controller/SimpleCAS/Store.pm
+lib/Catalyst/Controller/SimpleCAS/Store/DBIC.pm
 lib/Catalyst/Controller/SimpleCAS/Store/File.pm
 t/01_basic.t
 t/99_pod.t
