@@ -8,6 +8,7 @@ README
 README.pod
 dist.ini
 lib/Catalyst/Controller/SimpleCAS.pm
+lib/Catalyst/Controller/SimpleCAS/CSS/Simple.pm
 lib/Catalyst/Controller/SimpleCAS/Content.pm
 lib/Catalyst/Controller/SimpleCAS/MimeUriResolver.pm
 lib/Catalyst/Controller/SimpleCAS/Role/TextTranscode.pm

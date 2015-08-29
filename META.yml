@@ -17,7 +17,7 @@ meta-spec:
   version: '1.4'
 name: Catalyst-Controller-SimpleCAS
 requires:
-  CSS::Simple: '0'
+  Carp: '0'
   Catalyst::Controller: '0'
   Catalyst::Utils: '0'
   Data::Dumper: '0'
@@ -40,7 +40,9 @@ requires:
   Moose::Role: '0'
   MooseX::MethodAttributes::Role: '0.29'
   Path::Class: '0'
+  Storable: '0'
   String::Random: '0'
+  Tie::IxHash: '0'
   Try::Tiny: '0'
   Types::Standard: '0'
   bytes: '0'
@@ -51,4 +53,4 @@ resources:
   IRC: irc://irc.perl.org/#rapidapp
   bugtracker: https://github.com/vanstyn/Catalyst-Controller-SimpleCAS/issues
   repository: https://github.com/vanstyn/Catalyst-Controller-SimpleCAS.git
-version: '0.998'
+version: '0.9981'
